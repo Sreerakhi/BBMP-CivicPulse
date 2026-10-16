@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ShieldAlert className="w-5 h-5 text-cyan-400" />
           </div>
           <span className="text-lg font-bold tracking-tight text-white whitespace-nowrap">
-            BBMP CivicPulse
+            CivicPulse
           </span>
           <span className="text-xs font-mono text-slate-400 hidden sm:inline">
             Bengaluru Ward Intelligence

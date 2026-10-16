@@ -149,7 +149,7 @@ export default function App() {
       {/* Minimal Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>BBMP CivicPulse · Bengaluru Municipal Multi-Agent Governance Architecture</span>
+          <span>CivicPulse · Bengaluru Municipal Multi-Agent Governance Architecture</span>
           <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
             <span>Parastatals: BBMP · BWSSB · BESCOM · BTP</span>
             <span>·</span>
