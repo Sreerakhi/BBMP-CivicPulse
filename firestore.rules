@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Complaints collection
+    match /complaints/{complaintId} {
+      allow read: if true;
+      allow create: if isValidId(complaintId) &&
+        incoming().title is string && incoming().title.size() <= 200 &&
+        incoming().description is string && incoming().description.size() <= 2000 &&
+        incoming().ward is string && incoming().ward.size() <= 100 &&
+        incoming().status in ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+      allow update: if isValidId(complaintId) &&
+        incoming().status in ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+      allow delete: if false;
+    }
+
+    // Emerging issues collection
+    match /emerging_issues/{issueId} {
+      allow read: if true;
+      allow create, update: if isValidId(issueId) &&
+        incoming().title is string && incoming().title.size() <= 200 &&
+        incoming().ward is string &&
+        incoming().status in ['ACTIVE', 'INVESTIGATING', 'CONTAINED', 'RESOLVED'];
+      allow delete: if false;
+    }
+
+    // Multi-agent traces for transparency
+    match /agent_traces/{traceId} {
+      allow read: if true;
+      allow create, update: if isValidId(traceId);
+      allow delete: if false;
+    }
+  }
+}

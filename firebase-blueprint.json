@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Complaint": {
+      "title": "Complaint",
+      "description": "A civic complaint filed by a citizen or ingested via multi-agent pipeline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ticketNumber": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "category": { "type": "string", "enum": ["ROADS_INFRA", "WATER_SEWAGE", "ELECTRICITY", "SOLID_WASTE", "TRAFFIC", "OTHER"] },
+        "department": { "type": "string", "enum": ["BBMP", "BWSSB", "BESCOM", "BTP"] },
+        "ward": { "type": "string", "maxLength": 100 },
+        "location": { "type": "object" },
+        "urgency": { "type": "string", "enum": ["EMERGENCY", "HIGH", "MEDIUM", "LOW"] },
+        "status": { "type": "string", "enum": ["SUBMITTED", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED", "CLOSED"] },
+        "evidencePhotoUrl": { "type": "string" },
+        "slaHours": { "type": "number" },
+        "duplicateOf": { "type": "string" },
+        "duplicateCount": { "type": "number" },
+        "citizenRating": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticketNumber", "title", "description", "category", "department", "ward", "status"]
+    },
+    "EmergingIssue": {
+      "title": "EmergingIssue",
+      "description": "An automated cluster-detected civic anomaly or crisis.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ward": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "complaintCount": { "type": "number" },
+        "severity": { "type": "string", "enum": ["CRITICAL", "ELEVATED", "MONITORING"] },
+        "clusterRadiusMeters": { "type": "number" },
+        "recommendedAction": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INVESTIGATING", "CONTAINED", "RESOLVED"] },
+        "detectedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ward", "category", "title", "complaintCount", "severity", "status"]
+    },
+    "AgentTrace": {
+      "title": "AgentTrace",
+      "description": "Multi-agent execution trace and reasoning log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "complaintId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "steps": { "type": "array" }
+      },
+      "required": ["id", "steps"]
+    }
+  },
+  "firestore": {
+    "/complaints/{complaintId}": {
+      "schema": "Complaint",
+      "description": "Civic complaints and grievances filed across wards."
+    },
+    "/emerging_issues/{issueId}": {
+      "schema": "EmergingIssue",
+      "description": "Automated anomaly detections across ward clusters."
+    },
+    "/agent_traces/{traceId}": {
+      "schema": "AgentTrace",
+      "description": "Reasoning inspector traces for agent transparency."
+    }
+  }
+}

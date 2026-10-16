@@ -1,0 +1,6 @@
+{
+  "summary": "Detailed architectural blueprint and specification for the Bengaluru BBMP Multi-Agent Civic Governance Platform. Defines the Citizen Civic Complaint Copilot, City Civic Command Center, Ward Geo-Batching Engine, RAG-grounded knowledge base, persistent Firebase Firestore data model, and interactive Multi-Agent Reasoning Inspector.",
+  "updatedAt": "2026-10-16T02:35:56.193153400Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

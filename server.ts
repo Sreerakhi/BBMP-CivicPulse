@@ -1,0 +1,110 @@
+import express from 'express';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
+import { runAgentOrchestration, evaluateEmergingIssues } from './server/agents.ts';
+import { generateInitialComplaints, generateInitialEmergingIssues } from './server/seedData.ts';
+import { BBMP_CITIZEN_CHARTER, BENGALURU_WARDS } from './server/knowledgeBase.ts';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function startServer() {
+  const app = express();
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+  // Middleware
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+  // --- API Routes ---
+
+  // 1. Multi-Agent Coordinator Endpoint
+  app.post('/api/agents/coordinate', async (req, res) => {
+    try {
+      const { userInput, evidencePhotoBase64, existingComplaints, providedLocation } = req.body;
+      if (!userInput && !evidencePhotoBase64) {
+        return res.status(400).json({ error: 'Either userInput or evidencePhotoBase64 is required.' });
+      }
+
+      const orchestrationResult = await runAgentOrchestration({
+        userInput: userInput || 'Civic infrastructure defect reported via photo upload',
+        evidencePhotoBase64,
+        existingComplaints,
+        providedLocation
+      });
+
+      res.json(orchestrationResult);
+    } catch (err: any) {
+      console.error('Agent Orchestration Error:', err);
+      res.status(500).json({ error: err.message || 'Internal agent coordination error' });
+    }
+  });
+
+  // 2. Anomaly & Emerging Issue Detection Endpoint
+  app.post('/api/agents/detect-anomalies', (req, res) => {
+    try {
+      const { complaints } = req.body;
+      if (!Array.isArray(complaints)) {
+        return res.status(400).json({ error: 'complaints array is required' });
+      }
+      const emergingIssues = evaluateEmergingIssues(complaints);
+      res.json({ emergingIssues });
+    } catch (err: any) {
+      console.error('Anomaly Detection Error:', err);
+      res.status(500).json({ error: err.message || 'Anomaly evaluation error' });
+    }
+  });
+
+  // 3. Civic Data Seeder Endpoint (returns rich pre-seeded grievances for Firestore)
+  app.post('/api/seed-civic-data', (_req, res) => {
+    try {
+      const complaints = generateInitialComplaints();
+      const emergingIssues = generateInitialEmergingIssues();
+      res.json({
+        success: true,
+        complaints,
+        emergingIssues,
+        message: `Seeded ${complaints.length} complaints and ${emergingIssues.length} emerging anomaly clusters across Bengaluru wards.`
+      });
+    } catch (err: any) {
+      console.error('Data Seed Error:', err);
+      res.status(500).json({ error: err.message || 'Data seed failed' });
+    }
+  });
+
+  // 4. Civic RAG & Parastatal Knowledge Base
+  app.get('/api/knowledge-base', (_req, res) => {
+    res.json({
+      charter: BBMP_CITIZEN_CHARTER,
+      wards: BENGALURU_WARDS
+    });
+  });
+
+  // Vite integration in Dev vs Production
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!isProd) {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`BBMP CivicPulse server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});
