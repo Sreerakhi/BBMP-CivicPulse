@@ -156,6 +156,16 @@ async function startServer() {
     });
   });
 
+  // Serve presentation PDF directly
+  app.get('/civicpulse_presentation.pdf', (_req, res) => {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="civicpulse_presentation.pdf"');
+    res.sendFile(path.resolve(__dirname, 'public', 'civicpulse_presentation.pdf'));
+  });
+
+  // Serve public static directory (e.g. PDF presentation and public assets)
+  app.use(express.static(path.resolve(__dirname, 'public')));
+
   // Vite integration in Dev vs Production
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {

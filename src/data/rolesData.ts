@@ -1,0 +1,197 @@
+import { UserRole, RoleProfile, ParastatalDepartment } from '../types/civic.ts';
+
+export const USER_ROLES: RoleProfile[] = [
+  {
+    role: 'CITIZEN',
+    title: 'Common Citizen',
+    department: 'CITIZEN',
+    badge: 'Resident / Citizen',
+    description: 'Raise grievances, track lifecycle in real-time, and verify quality with 1–5 star ratings upon completion.',
+    color: 'emerald',
+    permissions: {
+      canCreateComplaint: true,
+      canViewAllDepartments: true,
+      canAcknowledge: false,
+      canAssignTeam: false,
+      canUpdateStatus: false,
+      canMarkResolved: false,
+      canReassignDepartment: false,
+      canRateComplaint: true,
+      canSeedData: false,
+    },
+  },
+  {
+    role: 'OFFICER_BBMP',
+    title: 'BBMP Municipal Engineer',
+    department: 'BBMP',
+    badge: 'BBMP Engineering & Health',
+    description: 'Triage road potholes, footpaths, solid waste blackspots, and stormwater drains across Bengaluru wards.',
+    color: 'amber',
+    permissions: {
+      canCreateComplaint: false,
+      canViewAllDepartments: true,
+      canAcknowledge: true,
+      canAssignTeam: true,
+      canUpdateStatus: true,
+      canMarkResolved: true,
+      canReassignDepartment: false,
+      canRateComplaint: false,
+      canSeedData: true,
+    },
+  },
+  {
+    role: 'OFFICER_BWSSB',
+    title: 'BWSSB Water & Sewerage Officer',
+    department: 'BWSSB',
+    badge: 'BWSSB Sanitary & Water',
+    description: 'Dispatch water main burst repair teams, sewage jetting machines, and drinking water testing crews.',
+    color: 'cyan',
+    permissions: {
+      canCreateComplaint: false,
+      canViewAllDepartments: true,
+      canAcknowledge: true,
+      canAssignTeam: true,
+      canUpdateStatus: true,
+      canMarkResolved: true,
+      canReassignDepartment: false,
+      canRateComplaint: false,
+      canSeedData: true,
+    },
+  },
+  {
+    role: 'OFFICER_BESCOM',
+    title: 'BESCOM Electrical Engineer',
+    department: 'BESCOM',
+    badge: 'BESCOM Power & Grid',
+    description: 'Handle dangerous live wires, sparking transformers, power outages, and streetlight feeder failures.',
+    color: 'yellow',
+    permissions: {
+      canCreateComplaint: false,
+      canViewAllDepartments: true,
+      canAcknowledge: true,
+      canAssignTeam: true,
+      canUpdateStatus: true,
+      canMarkResolved: true,
+      canReassignDepartment: false,
+      canRateComplaint: false,
+      canSeedData: true,
+    },
+  },
+  {
+    role: 'OFFICER_BTP',
+    title: 'BTP Traffic Inspector',
+    department: 'BTP',
+    badge: 'Bengaluru Traffic Police',
+    description: 'Manage traffic signal failures, junction waterlogging gridlocks, and transit lane obstructions.',
+    color: 'purple',
+    permissions: {
+      canCreateComplaint: false,
+      canViewAllDepartments: true,
+      canAcknowledge: true,
+      canAssignTeam: true,
+      canUpdateStatus: true,
+      canMarkResolved: true,
+      canReassignDepartment: false,
+      canRateComplaint: false,
+      canSeedData: true,
+    },
+  },
+  {
+    role: 'ADMIN',
+    title: 'City Municipal Commissioner',
+    department: 'ALL',
+    badge: 'Super Admin (All Agencies)',
+    description: 'Omniscient administrative authority. Cross-department reassignment, emergency overrides, and full telemetry.',
+    color: 'rose',
+    permissions: {
+      canCreateComplaint: true,
+      canViewAllDepartments: true,
+      canAcknowledge: true,
+      canAssignTeam: true,
+      canUpdateStatus: true,
+      canMarkResolved: true,
+      canReassignDepartment: true,
+      canRateComplaint: true,
+      canSeedData: true,
+    },
+  },
+];
+
+export const DEPARTMENT_FIELD_TEAMS: Record<
+  ParastatalDepartment,
+  { teamName: string; officerInCharge: string; vehicle: string }[]
+> = {
+  BBMP: [
+    {
+      teamName: 'BBMP Pothole Quick-Repair Squad Alpha',
+      officerInCharge: 'Er. Rajesh Gowda (AEE)',
+      vehicle: 'Jetpatcher Truck KA-01-EA-4412',
+    },
+    {
+      teamName: 'BBMP Footpath & Pedestrian Safety Gang 3',
+      officerInCharge: 'Er. Sandeep Rao (AE)',
+      vehicle: 'Utility Van KA-01-G-7821',
+    },
+    {
+      teamName: 'BBMP Solid Waste Rapid Action Strike Unit',
+      officerInCharge: 'Dr. Savitha Murthy (Health Insp.)',
+      vehicle: 'Compactor Tipper KA-01-EQ-9011',
+    },
+    {
+      teamName: 'BBMP Stormwater Drain De-silting Unit 2',
+      officerInCharge: 'Er. M. Venkatesh (EE SWD)',
+      vehicle: 'JCB Backhoe Loader KA-01-EX-3120',
+    },
+  ],
+  BWSSB: [
+    {
+      teamName: 'BWSSB Emergency Pipeline Burst Squad #3',
+      officerInCharge: 'Er. Anand Rao (AEE Water)',
+      vehicle: 'Rapid Excavation Crane KA-05-G-1102',
+    },
+    {
+      teamName: 'BWSSB High-Pressure Jetting & Suction Unit 4',
+      officerInCharge: 'Er. Pradeep Kumar (Sanitary Insp.)',
+      vehicle: 'Super Sucker Jetting Machine KA-05-G-8891',
+    },
+    {
+      teamName: 'BWSSB Drinking Water Contamination Mobile Lab',
+      officerInCharge: 'Dr. Keerthi V (Chemist)',
+      vehicle: 'Mobile Testing Lab KA-05-EA-2201',
+    },
+  ],
+  BESCOM: [
+    {
+      teamName: 'BESCOM 24/7 Transformer Hazard Rapid Squad #1',
+      officerInCharge: 'Er. Kiran Nayak (AEE O&M)',
+      vehicle: 'Emergency Crane Van KA-04-G-4456',
+    },
+    {
+      teamName: 'BESCOM Overhead Live-Wire Restringing Gang 2',
+      officerInCharge: 'Er. Ramesh Babu (Section Officer)',
+      vehicle: 'Hydraulic Bucket Lifter KA-04-G-9904',
+    },
+    {
+      teamName: 'BESCOM Streetlight Smart Feeder Gang 5',
+      officerInCharge: 'Er. Divya Prakash (AE)',
+      vehicle: 'Maintenance Van KA-04-EA-3112',
+    },
+  ],
+  BTP: [
+    {
+      teamName: 'BTP Traffic Signal Automation & Sync Crew',
+      officerInCharge: 'Inspector Suresh Patil',
+      vehicle: 'Traffic Response Cruiser KA-02-G-5001',
+    },
+    {
+      teamName: 'BTP Junction Waterlogging & Diversion Patrol',
+      officerInCharge: 'Sub-Inspector Manjunath K',
+      vehicle: 'Patrol SUV KA-02-G-1212',
+    },
+    {
+      teamName: 'BTP Road Obstruction Hydraulic Towing Squad',
+      officerInCharge: 'Head Constable Girish',
+      vehicle: 'Heavy Hydraulic Tow Truck KA-02-G-7733',
+    },
+  ],
+};

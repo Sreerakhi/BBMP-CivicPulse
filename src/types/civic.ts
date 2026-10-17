@@ -27,6 +27,34 @@ export interface LocationDetail {
   pincode?: string;
 }
 
+export type UserRole =
+  | 'CITIZEN'
+  | 'ADMIN'
+  | 'OFFICER_BBMP'
+  | 'OFFICER_BWSSB'
+  | 'OFFICER_BESCOM'
+  | 'OFFICER_BTP';
+
+export interface RoleProfile {
+  role: UserRole;
+  title: string;
+  department: ParastatalDepartment | 'ALL' | 'CITIZEN';
+  badge: string;
+  description: string;
+  color: string;
+  permissions: {
+    canCreateComplaint: boolean;
+    canViewAllDepartments: boolean;
+    canAcknowledge: boolean;
+    canAssignTeam: boolean;
+    canUpdateStatus: boolean;
+    canMarkResolved: boolean;
+    canReassignDepartment: boolean;
+    canRateComplaint: boolean;
+    canSeedData: boolean;
+  };
+}
+
 export interface CitizenRating {
   stars: number;
   feedback: string;
@@ -48,6 +76,10 @@ export interface Complaint {
   slaHours: number;
   duplicateOf?: string; // Master ticket ID if duplicate
   duplicateCount?: number;
+  assignedTeam?: string; // e.g. "BBMP Ward 151 Road Repair Squad Alpha"
+  assignedOfficer?: string; // e.g. "Er. Rajesh Kumar, AEE"
+  assignedAt?: string;
+  resolvedAt?: string;
   rating?: number; // 1 to 5 stars
   feedback?: string; // Citizen qualitative feedback
   citizenRating?: CitizenRating;

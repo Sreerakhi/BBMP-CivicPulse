@@ -5,12 +5,13 @@ import { CommandCenter } from './components/CommandCenter.tsx';
 import { WardTriage } from './components/WardTriage.tsx';
 import { AgentInspector } from './components/AgentInspector.tsx';
 import { WardMapPicker, SelectedLocationData } from './components/WardMapPicker.tsx';
-import { Complaint, EmergingIssue, AgentTrace } from './types/civic.ts';
+import { Complaint, EmergingIssue, AgentTrace, UserRole } from './types/civic.ts';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'copilot' | 'command' | 'ward-triage' | 'inspector' | 'ward-map'>('copilot');
+  const [currentRole, setCurrentRole] = useState<UserRole>('CITIZEN');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [emergingIssues, setEmergingIssues] = useState<EmergingIssue[]>([]);
   const [myComplaints, setMyComplaints] = useState<Complaint[]>([]);
@@ -116,6 +117,8 @@ export default function App() {
         onSeedData={triggerDataSeed}
         isSeeding={isSeeding}
         complaintCount={complaints.length}
+        currentRole={currentRole}
+        onSelectRole={setCurrentRole}
       />
 
       {/* Main View Area */}
@@ -128,7 +131,24 @@ export default function App() {
             }}
             myComplaints={myComplaints}
             setMyComplaints={setMyComplaints}
+            initialLocation={selectedLocationFromMap}
           />
+        )}
+
+        {activeTab === 'ward-map' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+            <WardMapPicker
+              currentLandmark={selectedLocationFromMap?.landmark}
+              currentWard={selectedLocationFromMap?.ward}
+              fullPageView={true}
+              onLocationSelect={loc => {
+                setSelectedLocationFromMap(loc);
+              }}
+              onProceed={() => {
+                setActiveTab('copilot');
+              }}
+            />
+          </div>
         )}
 
         {activeTab === 'command' && (
@@ -136,6 +156,7 @@ export default function App() {
             complaints={complaints}
             emergingIssues={emergingIssues}
             onRefreshData={triggerDataSeed}
+            currentRole={currentRole}
           />
         )}
 
@@ -155,7 +176,7 @@ export default function App() {
           <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
             <span>Parastatals: BBMP · BWSSB · BESCOM · BTP</span>
             <span>·</span>
-            <span>Wards: 151, 112, 174, 89</span>
+            <span>Active Persona: <strong className="text-cyan-400">{currentRole}</strong></span>
           </div>
         </div>
       </footer>

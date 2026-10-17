@@ -247,6 +247,75 @@ Citizen rates 5 Stars & submits review ─────────────�
 
 ---
 
-### Slide 16: Closing / Thank You Slide
+### Slide 17: Role-Based Access Control (RBAC) & Multi-Department Governance Workflow
+**Theme**: Accountable Digital Public Infrastructure (DPI) & Separation of Civic Powers
+
+#### 1. Architectural Role Hierarchy & Authority Matrix
+| Role Persona | Target Users | Core Capabilities & Permissions | Security Safeguards |
+| :--- | :--- | :--- | :--- |
+| **`CITIZEN`** *(Common Man)* | Bengaluru Residents | • File multimodal grievances (Voice/Photo/Text/Ward Map)<br>• Real-time ticket lifecycle tracking<br>• Post-resolution 5-Star Rating & quality review | Cannot dispatch field squads, reassign agencies, or unilaterally mark complaints resolved. |
+| **`OFFICER_BBMP`** | BBMP Engineers & Health Inspectors | • Triage Road, Footpath, Drain & Garbage complaints<br>• Acknowledge tickets within 2h statutory window<br>• Dispatch BBMP Jetpatcher & SWM Strike Units<br>• Mark resolved with mandatory official audit notes | Limited to BBMP jurisdiction. Out-of-scope complaints flagged for Admin transfer. |
+| **`OFFICER_BWSSB`** | Water Supply & Sanitary Engineers | • Triage Water Main bursts, contaminated water, UGD sewage overflows<br>• Dispatch Super-Sucker & mobile water testing labs<br>• Mark resolved with water quality remarks | Limited to BWSSB assets. Auto-coordinates with BBMP when road excavation is required. |
+| **`OFFICER_BESCOM`** | Electrical Grid Engineers | • Triage hazardous hanging live wires & transformer sparks<br>• Dispatch 24/7 Rapid Transformer Replacement Crews<br>• Expedited &lt;6h SLA lifecycle execution | High-voltage hazard priority dispatch. Read-only for non-electrical civic issues. |
+| **`OFFICER_BTP`** | Bengaluru Traffic Police Inspectors | • Triage traffic signal breakdowns & junction waterlogging<br>• Dispatch signal sync cruiser & towing units<br>• Route diversions during emergency infrastructure work | Enforces traffic mobility without interfering in civil works. |
+| **`ADMIN`** *(City Commissioner)* | BBMP Special Commissioner & Command Room Chiefs | • Full omniscient visibility across all 198 wards<br>• Cross-parastatal grievance transfers & overrides<br>• Emergency SLA escalation & disaster protocol triggers<br>• System data seeding & live telemetry diagnostics | Full cryptographic audit trails logged in Cloud Firestore `/agent_traces`. |
+
+---
+
+#### 2. End-to-End Governance Lifecycle & Field Repair Workflow Diagram
+```
+┌────────────────────────┐      ┌───────────────────────────┐      ┌──────────────────────────┐      ┌────────────────────────┐
+│  🧑‍💼 COMMON MAN /       │      │  🏛️ DEPARTMENT OFFICER     │      │  🚜 FIELD REPAIR SQUAD    │      │  👑 MUNICIPAL ADMIN    │
+│     CITIZEN            │      │  (BBMP / BWSSB / BESCOM)  │      │     (Truck / Crew)       │      │  (City Commissioner)   │
+└───────────┬────────────┘      └─────────────┬─────────────┘      └────────────┬─────────────┘      └───────────┬────────────┘
+            │                                 │                                 │                            │
+   1. Speaks / Files Grievance                │                                 │                            │
+   (Ward Map / Photo / Audio)                 │                                 │                            │
+            │                                 │                                 │                            │
+            ▼                                 │                                 │                            │
+   ┌─────────────────┐                        │                                 │                            │
+   │ Ticket Created: │                        │                                 │                            │
+   │  #BBMP-KOR-0842 │                        │                                 │                            │
+   └────────┬────────┘                        │                                 │                            │
+            │                                 │                                 │                            │
+            ├────────────────────────────────►│ 2. Reviews in Dept Queue        │                            │
+            │                                 │    (Filtered by Jurisdiction)   │                            │
+            │                                 │                                 │                            │
+            │                                 ├─► 3. Clicks "Acknowledge"       │                            │
+            │                                 │      (Sets Ticket to ACK)       │                            │
+            │                                 │                                 │                            │
+            │                                 ├─► 4. Selects Field Squad ──────►│ 5. Dispatched to Site      │
+            │                                 │      (e.g. Jetpatcher KA-01-EA) │    (Ticket IN_PROGRESS)    │
+            │                                 │                                 │    Repair Executed         │
+            │                                 │                                 │    at Geo-Coordinates      │
+            │                                 │                                 │            │               │
+            │                                 │ 6. Squad Completes Repair ◄─────┴────────────┘               │
+            │                                 │    Uploads Before/After Proof                                │
+            │                                 │                                                              │
+            │                                 ├─► 7. Enters Official Audit Remarks                           │
+            │                                 │      & Clicks "Mark Resolved"                                │
+            │                                 │      (Ticket status: RESOLVED)                               │
+            │                                 │                  │                                           │
+            │ 8. Real-time Notification ◄─────┴──────────────────┘                                           │
+            ▼                                                                                                │
+   ┌────────────────────────────────┐                                                                        │
+   │ 9. Citizen Verification Loop:  │                                                                        │
+   │    Rates 1–5 Stars ★★★★★       │───────────────────────────────────────────────────────────────────────►│ 10. Citywide SLA &
+   │    Qualitative Citizen Feedback│                                                                        │     Officer Quality
+   │    Ticket permanently CLOSED   │                                                                        │     Dashboard Updated
+   └────────────────────────────────┘                                                                        │
+```
+
+---
+
+#### 3. Parastatal Field Squad & Vehicle Dispatch Inventory
+* **BBMP**: *Jetpatcher Road Crew Alpha* (KA-01-EA-4412), *Footpath Gang 3* (KA-01-G-7821), *SWM Strike Unit 4* (KA-01-EQ-9011), *SWD De-silting JCB Crew* (KA-01-EX-3120).
+* **BWSSB**: *Pipeline Burst Squad #3* (KA-05-G-1102), *Super Sucker Jetting Machine Unit 4* (KA-05-G-8891), *Water Contamination Mobile Lab* (KA-05-EA-2201).
+* **BESCOM**: *24/7 Rapid Transformer Squad #1* (KA-04-G-4456), *Live-Wire Restringing Gang 2* (KA-04-G-9904), *Streetlight Smart Feeder Gang 5* (KA-04-EA-3112).
+* **BTP**: *Traffic Signal Sync Cruiser #4* (KA-02-G-5001), *Junction Waterlogging Diversion Patrol* (KA-02-G-1212), *Hydraulic Towing Squad* (KA-02-G-7733).
+
+---
+
+### Slide 18: Closing / Thank You Slide
 **CivicPulse — Building Smarter Cities with Multi-Agent AI.**  
 *Built in JAPAC for Google Cloud AI Builder Cup.*
