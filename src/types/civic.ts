@@ -48,6 +48,8 @@ export interface Complaint {
   slaHours: number;
   duplicateOf?: string; // Master ticket ID if duplicate
   duplicateCount?: number;
+  rating?: number; // 1 to 5 stars
+  feedback?: string; // Citizen qualitative feedback
   citizenRating?: CitizenRating;
   createdAt: string;
   updatedAt: string;

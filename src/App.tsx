@@ -4,15 +4,17 @@ import { CitizenCopilot } from './components/CitizenCopilot.tsx';
 import { CommandCenter } from './components/CommandCenter.tsx';
 import { WardTriage } from './components/WardTriage.tsx';
 import { AgentInspector } from './components/AgentInspector.tsx';
+import { WardMapPicker, SelectedLocationData } from './components/WardMapPicker.tsx';
 import { Complaint, EmergingIssue, AgentTrace } from './types/civic.ts';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'copilot' | 'command' | 'ward-triage' | 'inspector'>('copilot');
+  const [activeTab, setActiveTab] = useState<'copilot' | 'command' | 'ward-triage' | 'inspector' | 'ward-map'>('copilot');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [emergingIssues, setEmergingIssues] = useState<EmergingIssue[]>([]);
   const [myComplaints, setMyComplaints] = useState<Complaint[]>([]);
+  const [selectedLocationFromMap, setSelectedLocationFromMap] = useState<SelectedLocationData | null>(null);
   const [currentTrace, setCurrentTrace] = useState<AgentTrace | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);

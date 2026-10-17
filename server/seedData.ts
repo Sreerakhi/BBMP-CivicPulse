@@ -181,6 +181,8 @@ export function generateInitialComplaints(): Complaint[] {
       slaHours: 48,
       createdAt: hoursAgo(36),
       updatedAt: hoursAgo(4),
+      rating: 5,
+      feedback: 'BBMP engineering team replaced all three concrete slabs within 30 hours. Very prompt action!',
       citizenRating: {
         stars: 5,
         feedback: 'BBMP engineering team replaced all three concrete slabs within 30 hours. Very prompt action!',
@@ -236,6 +238,8 @@ export function generateInitialComplaints(): Complaint[] {
       slaHours: 12,
       createdAt: hoursAgo(28),
       updatedAt: hoursAgo(8),
+      rating: 4,
+      feedback: 'Traffic police repaired the timer controller. Flow is smooth again.',
       citizenRating: {
         stars: 4,
         feedback: 'Traffic police repaired the timer controller. Flow is smooth again.',

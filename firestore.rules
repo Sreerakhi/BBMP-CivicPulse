@@ -27,7 +27,9 @@ service cloud.firestore {
         incoming().ward is string && incoming().ward.size() <= 100 &&
         incoming().status in ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
       allow update: if isValidId(complaintId) &&
-        incoming().status in ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+        incoming().status in ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'] &&
+        (!('rating' in incoming()) || (incoming().rating is number && incoming().rating >= 1 && incoming().rating <= 5)) &&
+        (!('feedback' in incoming()) || (incoming().feedback is string && incoming().feedback.size() <= 1000));
       allow delete: if false;
     }
 

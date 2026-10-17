@@ -15,17 +15,26 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Compass,
+  Volume2,
+  Radio,
+  X,
+  Info
 } from 'lucide-react';
-import { Complaint, AgentTrace, ParastatalDepartment } from '../types/civic.ts';
+import { Complaint, AgentTrace, ParastatalDepartment, ComplaintStatus } from '../types/civic.ts';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { collection, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { StarRating } from './StarRating.tsx';
+import { WardMapPicker, SelectedLocationData } from './WardMapPicker.tsx';
+import { BBMP_FULL_WARDS } from '../data/bbmpWardsData.ts';
 
 interface CitizenCopilotProps {
   existingComplaints: Complaint[];
   onTraceUpdate: (trace: AgentTrace) => void;
   myComplaints: Complaint[];
   setMyComplaints: React.Dispatch<React.SetStateAction<Complaint[]>>;
+  initialLocation?: SelectedLocationData | null;
 }
 
 export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
@@ -33,15 +42,39 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
   onTraceUpdate,
   myComplaints,
   setMyComplaints,
+  initialLocation,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
+  const [micStatusNote, setMicStatusNote] = useState<string | null>(null);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+
+  // Map & Location state
+  const [showMapPicker, setShowMapPicker] = useState(true);
+  const [autoDetectedWardBadge, setAutoDetectedWardBadge] = useState<string | null>(null);
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>({
+    lat: 12.9352,
+    lng: 77.6245,
+  });
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [landmarkInput, setLandmarkInput] = useState('');
   const [selectedWard, setSelectedWard] = useState('Koramangala 151');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync with initialLocation passed from Ward Map tab
+  useEffect(() => {
+    if (initialLocation) {
+      setLandmarkInput(initialLocation.landmark);
+      setSelectedWard(initialLocation.ward);
+      setSelectedCoords({ lat: initialLocation.lat, lng: initialLocation.lng });
+      setAutoDetectedWardBadge(`Auto-detected: ${initialLocation.ward}${initialLocation.constituency ? ` (${initialLocation.constituency})` : ''}`);
+      setShowMapPicker(true);
+    }
+  }, [initialLocation]);
 
   // Agent output state
   const [complaintDraft, setComplaintDraft] = useState<Partial<Complaint> | null>(null);
@@ -60,66 +93,250 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<any>(null);
 
   // Initialize Speech Recognition if supported
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-IN'; // Indian English
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-IN'; // Indian English
 
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setInputText(prev => (prev ? `${prev} ${transcript}` : transcript));
-      };
+        recognition.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          if (transcript) {
+            setInputText(prev => (prev ? `${prev} ${transcript}` : transcript));
+          }
+        };
 
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
+        recognition.onend = () => {
+          // Keep active state governed by MediaRecorder if still running
+        };
 
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
+        recognition.onerror = (e: any) => {
+          console.warn('SpeechRecognition notice:', e.error);
+        };
 
-      recognitionRef.current = recognition;
+        recognitionRef.current = recognition;
+      } catch (err) {
+        console.warn('SpeechRecognition initialization warning:', err);
+      }
     }
+
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
   }, []);
 
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      // Simulation fallback for voice
-      if (!isRecording) {
+  // Voice recording: Combines MediaRecorder + Gemini server-side transcription + Web Speech fallback
+  const startVoiceRecording = async () => {
+    setMicStatusNote(null);
+    setVoiceNotice(null);
+    audioChunksRef.current = [];
+    setRecordingSeconds(0);
+
+    // 1. Try real hardware microphone access
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+        mediaStreamRef.current = stream;
+
+        // Choose supported mimeType
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : '';
+
+        const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = event => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          // Process recorded audio
+          const chunks = audioChunksRef.current;
+          if (chunks.length > 0) {
+            const recordedBlob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+            await processAudioForTranscription(recordedBlob);
+          }
+
+          // Stop all audio stream tracks
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+          }
+        };
+
+        mediaRecorder.start(250); // Slice chunks every 250ms
         setIsRecording(true);
-        setTimeout(() => {
-          setInputText(
-            'There is a large crater pothole near Sony World Signal on 80 Feet Road in Koramangala and rainwater is accumulating.'
-          );
-          setIsRecording(false);
-        }, 1800);
-      } else {
-        setIsRecording(false);
+
+        // Start duration counter
+        timerIntervalRef.current = setInterval(() => {
+          setRecordingSeconds(prev => {
+            if (prev >= 29) {
+              stopVoiceRecording();
+              return 30;
+            }
+            return prev + 1;
+          });
+        }, 1000);
+
+        // Also start browser speech recognition in parallel for instant visual text
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch {
+            // SpeechRecognition may already be running or unsupported
+          }
+        }
+
+        return;
+      } catch (err: any) {
+        console.warn('Microphone getUserMedia not available or blocked:', err);
+        setMicStatusNote(
+          'Microphone permission is blocked by your browser settings or sandbox. Activating voice dictation test mode:'
+        );
       }
-      return;
     }
 
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
+    // 2. Fallback voice simulation when microphone hardware or browser permission is blocked
+    simulateVoiceInput('There is a large crater pothole near Sony World Signal on 80 Feet Road in Koramangala and rainwater is accumulating.');
+  };
+
+  const stopVoiceRecording = () => {
+    setIsRecording(false);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    if (recognitionRef.current) {
       try {
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } catch (err) {
-        console.warn('Speech start error:', err);
-        setIsRecording(false);
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore
       }
     }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping MediaRecorder:', err);
+      }
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopVoiceRecording();
+    } else {
+      startVoiceRecording();
+    }
+  };
+
+  // Convert audio blob to base64 and call /api/agents/transcribe
+  const processAudioForTranscription = async (blob: Blob) => {
+    setIsTranscribingAudio(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        try {
+          const res = await fetch('/api/agents/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioBase64: base64Data,
+              mimeType: blob.type || 'audio/webm',
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.transcript && data.transcript.trim()) {
+              setInputText(prev => {
+                const clean = data.transcript.trim();
+                return prev ? `${prev} ${clean}` : clean;
+              });
+              setVoiceNotice('Voice transcribed into text by AI');
+              setTimeout(() => setVoiceNotice(null), 4000);
+            }
+          }
+        } catch (fetchErr) {
+          console.error('Transcription request failed:', fetchErr);
+        } finally {
+          setIsTranscribingAudio(false);
+        }
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.error('Blob read error:', err);
+      setIsTranscribingAudio(false);
+    }
+  };
+
+  // Simulated voice dictation with realistic typing animation
+  const simulateVoiceInput = (sampleText: string) => {
+    setIsRecording(true);
+    setInputText('');
+    setVoiceNotice('Dictating speech input...');
+
+    let current = '';
+    const words = sampleText.split(' ');
+    let index = 0;
+
+    const interval = setInterval(() => {
+      if (index < words.length) {
+        current += (index === 0 ? '' : ' ') + words[index];
+        setInputText(current);
+        index++;
+      } else {
+        clearInterval(interval);
+        setIsRecording(false);
+        setVoiceNotice('Voice dictation complete');
+        setTimeout(() => setVoiceNotice(null), 3000);
+      }
+    }, 120);
+  };
+
+  // Handle location selected from interactive map or preset transit points
+  const handleLocationSelect = (data: SelectedLocationData) => {
+    setLandmarkInput(data.landmark);
+    setSelectedWard(data.ward);
+    setSelectedCoords({ lat: data.lat, lng: data.lng });
+    setAutoDetectedWardBadge(`Auto-detected: ${data.ward}`);
+  };
+
+  // Handle manual ward selection by citizen
+  const handleManualWardChange = (newWard: string) => {
+    setSelectedWard(newWard);
+    setAutoDetectedWardBadge(`Manually selected: ${newWard}`);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +376,7 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
           providedLocation: {
             landmark: landmarkInput,
             ward: selectedWard,
+            coordinates: selectedCoords,
           },
         }),
       });
@@ -202,9 +420,9 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
         landmark: landmarkInput || 'Ward prominent intersection',
         address: `${landmarkInput || 'Main Road'}, ${selectedWard}, Bengaluru`,
         ward: selectedWard,
-        wardNumber: 151,
-        lat: 12.9352,
-        lng: 77.6245,
+        wardNumber: selectedWard.includes('112') ? 112 : selectedWard.includes('174') ? 174 : selectedWard.includes('89') ? 89 : 151,
+        lat: selectedCoords?.lat || (selectedWard.includes('112') ? 12.9784 : selectedWard.includes('174') ? 12.9121 : selectedWard.includes('89') ? 12.9438 : 12.9352),
+        lng: selectedCoords?.lng || (selectedWard.includes('112') ? 77.6408 : selectedWard.includes('174') ? 77.6446 : selectedWard.includes('89') ? 77.6087 : 77.6245),
         pincode: '560034',
       },
       urgency: complaintDraft.urgency || 'HIGH',
@@ -246,42 +464,40 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
     }
   };
 
-  const handleRateResolution = async (complaintId: string) => {
-    const ratingData = ratingMap[complaintId];
-    if (!ratingData || ratingData.stars === 0) return;
+  const handleSimulateStatusAdvance = async (complaint: Complaint) => {
+    let nextStatus: ComplaintStatus = 'ACKNOWLEDGED';
+    if (complaint.status === 'SUBMITTED') nextStatus = 'ACKNOWLEDGED';
+    else if (complaint.status === 'ACKNOWLEDGED') nextStatus = 'IN_PROGRESS';
+    else if (complaint.status === 'IN_PROGRESS') nextStatus = 'RESOLVED';
+    else if (complaint.status === 'RESOLVED') nextStatus = 'CLOSED';
 
     try {
-      const updatePayload = {
-        citizenRating: {
-          stars: ratingData.stars,
-          feedback: ratingData.feedback || 'Resolution verified by citizen',
-          ratedAt: new Date().toISOString(),
-        },
-        status: 'CLOSED',
+      const notes =
+        nextStatus === 'RESOLVED'
+          ? 'Defect rectified and quality audited by Ward Engineering Squad.'
+          : nextStatus === 'IN_PROGRESS'
+          ? 'Field repair vehicle on-site performing repairs.'
+          : 'Acknowledged and scheduled in ward maintenance roster.';
+
+      await updateDoc(doc(db, 'complaints', complaint.id), {
+        status: nextStatus,
         updatedAt: serverTimestamp(),
-      };
+        officialResolutionNotes: notes,
+      });
 
-      await updateDoc(doc(db, 'complaints', complaintId), updatePayload);
-
-      setRatingSubmitted(prev => ({ ...prev, [complaintId]: true }));
       setMyComplaints(prev =>
         prev.map(c =>
-          c.id === complaintId
+          c.id === complaint.id
             ? {
                 ...c,
-                status: 'CLOSED',
-                citizenRating: {
-                  stars: ratingData.stars,
-                  feedback: ratingData.feedback || 'Resolution verified by citizen',
-                  ratedAt: new Date().toISOString(),
-                },
+                status: nextStatus,
+                officialResolutionNotes: notes,
               }
             : c
         )
       );
     } catch (err) {
-      console.error('Error submitting rating:', err);
-      setRatingSubmitted(prev => ({ ...prev, [complaintId]: true }));
+      console.error('Error advancing status:', err);
     }
   };
 
@@ -367,73 +583,224 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
 
         {/* Input Text Box with Speech Controls */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-            <span>Describe the Problem</span>
-            <span className="text-xs text-slate-500 font-normal">
-              Voice, text, or photo evidence
-            </span>
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <span>Describe the Problem</span>
+              <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/80 border border-cyan-800/60 px-1.5 py-0.5 rounded">
+                Voice & Multimodal
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              {voiceNotice && (
+                <span className="text-[11px] text-emerald-400 font-mono animate-fade-in">
+                  ✓ {voiceNotice}
+                </span>
+              )}
+              <span className="text-xs text-slate-400 font-normal hidden sm:inline">
+                Click microphone or speak clearly
+              </span>
+            </div>
+          </div>
+
           <div className="relative">
             <textarea
               rows={3}
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               placeholder="e.g. Broken water pipe leaking continuously on 80 Feet Road near Sony World Signal..."
-              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg p-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-all resize-none pr-12"
+              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg p-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-all resize-none pr-14"
             />
             <button
               type="button"
               onClick={toggleRecording}
-              className={`absolute right-3 bottom-3 p-2 rounded-lg transition-all ${
+              className={`absolute right-3 bottom-3 p-2.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md ${
                 isRecording
-                  ? 'bg-rose-500 text-white animate-pulse'
-                  : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'
+                  ? 'bg-rose-600 text-white animate-pulse ring-2 ring-rose-400'
+                  : isTranscribingAudio
+                  ? 'bg-cyan-600 text-white animate-spin'
+                  : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700'
               }`}
-              title={isRecording ? 'Listening... click to stop' : 'Click to speak grievance'}
+              title={
+                isRecording
+                  ? 'Recording live voice... click to stop'
+                  : isTranscribingAudio
+                  ? 'Transcribing audio with Gemini...'
+                  : 'Click to speak grievance using your microphone'
+              }
             >
-              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isRecording ? (
+                <MicOff className="w-4 h-4 text-white" />
+              ) : isTranscribingAudio ? (
+                <RotateCcw className="w-4 h-4 text-white animate-spin" />
+              ) : (
+                <Mic className="w-4 h-4 text-cyan-400" />
+              )}
             </button>
           </div>
+
+          {/* Active Voice Recording Status Bar */}
           {isRecording && (
-            <div className="flex items-center gap-2 text-xs text-rose-400 font-mono">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              <span>Voice intake active: speak your grievance clearly...</span>
+            <div className="flex items-center justify-between bg-rose-950/40 border border-rose-500/40 rounded-lg px-3 py-2 text-xs text-rose-300 font-mono">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                <span className="font-semibold text-rose-200">
+                  Recording Live Voice (00:{recordingSeconds < 10 ? '0' : ''}{recordingSeconds} / 00:30)
+                </span>
+                <span className="hidden sm:inline text-rose-400">· Speak into your microphone</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 h-3">
+                  <span className="w-0.5 h-3 bg-rose-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-0.5 h-2 bg-rose-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-0.5 h-4 bg-rose-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <button
+                  type="button"
+                  onClick={stopVoiceRecording}
+                  className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition-colors"
+                >
+                  Done & Transcribe
+                </button>
+              </div>
             </div>
           )}
+
+          {/* AI Transcribing Notice */}
+          {isTranscribingAudio && (
+            <div className="flex items-center gap-2.5 bg-cyan-950/40 border border-cyan-500/40 rounded-lg px-3 py-2 text-xs text-cyan-300 font-mono">
+              <RotateCcw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+              <span>Gemini AI is transcribing your spoken audio into structured text...</span>
+            </div>
+          )}
+
+          {/* Microphone Permission Status Notice */}
+          {micStatusNote && (
+            <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-2.5 text-xs text-amber-300 flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>{micStatusNote}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMicStatusNote(null)}
+                className="text-amber-400 hover:text-amber-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Quick Voice Simulation Buttons for 1-Click Testing */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 mr-1">
+              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Voice Presets:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                simulateVoiceInput(
+                  'There is a massive dangerous pothole on 80 Feet Road near Sony World Signal with overflowing rainwater.'
+                )
+              }
+              className="text-[11px] px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-700/80 border border-slate-700 text-slate-300 transition-colors flex items-center gap-1"
+            >
+              🎙️ Pothole on 80ft Road
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                simulateVoiceInput(
+                  'Exposed high voltage electrical wire sparking from BESCOM pole on 12th Main Indiranagar.'
+                )
+              }
+              className="text-[11px] px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-700/80 border border-slate-700 text-slate-300 transition-colors flex items-center gap-1"
+            >
+              ⚡ Sparking Wire on 12th Main
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                simulateVoiceInput(
+                  'Drinking water pipeline ruptured on Koramangala 4th block with heavy flooding.'
+                )
+              }
+              className="text-[11px] px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-700/80 border border-slate-700 text-slate-300 transition-colors flex items-center gap-1"
+            >
+              💧 Drinking Water Pipe Burst
+            </button>
+          </div>
         </div>
 
         {/* Additional Location & Photo Input Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Nearby Landmark / Street</span>
-            </label>
-            <input
-              type="text"
-              value={landmarkInput}
-              onChange={e => setLandmarkInput(e.target.value)}
-              placeholder="e.g. Sony World Signal / 12th Main BDA"
-              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Nearby Landmark / Street</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowMapPicker(!showMapPicker)}
+                  className="text-[11px] font-medium text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/70 hover:bg-cyan-900/70 border border-cyan-800/80 px-2 py-0.5 rounded transition-colors"
+                >
+                  <Compass className="w-3 h-3" />
+                  <span>{showMapPicker ? 'Hide Ward Map' : '🗺️ Pick on Map'}</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={landmarkInput}
+                onChange={e => setLandmarkInput(e.target.value)}
+                placeholder="e.g. Sony World Signal / Click on map below..."
+                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              />
+              <span className="text-[10px] text-slate-400 block">
+                Click anywhere on the map below to auto-fill landmark & detect ward jurisdiction
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Ward Jurisdiction</span>
+                </label>
+                {autoDetectedWardBadge && (
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/60 px-1.5 py-0.5 rounded truncate max-w-[180px]">
+                    ⚡ {autoDetectedWardBadge}
+                  </span>
+                )}
+              </div>
+              <select
+                value={selectedWard}
+                onChange={e => handleManualWardChange(e.target.value)}
+                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              >
+                {BBMP_FULL_WARDS.map(w => (
+                  <option key={w.id} value={`${w.name} ${w.number}`}>
+                    Ward {w.number}: {w.name} ({w.zone} Zone) – {w.assemblyConstituency}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[10px] text-slate-400 block">
+                System auto-detects from map, or you can manually select from dropdown
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Ward Jurisdiction</span>
-            </label>
-            <select
-              value={selectedWard}
-              onChange={e => setSelectedWard(e.target.value)}
-              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            >
-              <option value="Koramangala 151">Ward 151: Koramangala (South Zone)</option>
-              <option value="Indiranagar 112">Ward 112: Indiranagar (East Zone)</option>
-              <option value="HSR Layout 174">Ward 174: HSR Layout (Bommanahalli Zone)</option>
-              <option value="Adugodi 89">Ward 89: Adugodi (South Zone)</option>
-            </select>
-          </div>
+          {/* Interactive Bengaluru Ward Map Picker */}
+          {showMapPicker && (
+            <div className="pt-1">
+              <WardMapPicker
+                currentLandmark={landmarkInput}
+                currentWard={selectedWard}
+                onLocationSelect={handleLocationSelect}
+              />
+            </div>
+          )}
         </div>
 
         {/* Photo Upload Slot */}
@@ -703,8 +1070,8 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
                     </div>
                   </div>
 
-                  {/* Status Badge */}
-                  <div>
+                  {/* Status Badge & Simulation Control */}
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
                     <span
                       className={`text-xs px-2.5 py-1 rounded font-mono font-semibold ${
                         comp.status === 'RESOLVED' || comp.status === 'CLOSED'
@@ -716,6 +1083,23 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
                     >
                       {comp.status}
                     </span>
+
+                    {/* Status lifecycle progression control */}
+                    {comp.status !== 'CLOSED' && (
+                      <button
+                        onClick={() => handleSimulateStatusAdvance(comp)}
+                        className="text-[11px] px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 font-mono transition-colors"
+                        title="Simulate municipal officer advancing this ticket"
+                      >
+                        {comp.status === 'SUBMITTED'
+                          ? '→ Acknowledge'
+                          : comp.status === 'ACKNOWLEDGED'
+                          ? '→ Dispatch Crew'
+                          : comp.status === 'IN_PROGRESS'
+                          ? '→ Mark Resolved'
+                          : 'Close Ticket'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -755,93 +1139,39 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
                 {comp.officialResolutionNotes && (
                   <div className="bg-slate-800/50 p-3 rounded text-xs text-slate-300 border border-slate-700/60">
                     <span className="font-semibold text-emerald-400 block mb-0.5">
-                      Municipal Engineer Note:
+                      Municipal Engineer Resolution Log:
                     </span>
                     <span>{comp.officialResolutionNotes}</span>
                   </div>
                 )}
 
-                {/* 5-Star Citizen Rating Workflow upon Completion */}
+                {/* Dedicated StarRating Component upon Resolution or Closure */}
                 {(comp.status === 'RESOLVED' || comp.status === 'CLOSED') && (
-                  <div className="bg-emerald-950/20 border border-emerald-600/30 rounded-lg p-4 space-y-3">
-                    <span className="text-xs font-bold text-emerald-300 block">
-                      Citizen Feedback & Resolution Rating
-                    </span>
-
-                    {comp.citizenRating || ratingSubmitted[comp.id] ? (
-                      <div className="space-y-1 text-xs text-slate-300">
-                        <div className="flex items-center gap-1 text-amber-400">
-                          {Array.from({
-                            length: comp.citizenRating?.stars || ratingMap[comp.id]?.stars || 5,
-                          }).map((_, i) => (
-                            <Star key={i} className="w-4 h-4 fill-amber-400" />
-                          ))}
-                        </div>
-                        <p className="italic text-slate-400">
-                          "
-                          {comp.citizenRating?.feedback ||
-                            ratingMap[comp.id]?.feedback ||
-                            'Prompt and satisfactory resolution.'}
-                          "
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400">Rate resolution quality:</span>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map(star => (
-                              <button
-                                key={star}
-                                onClick={() =>
-                                  setRatingMap(prev => ({
-                                    ...prev,
-                                    [comp.id]: {
-                                      stars: star,
-                                      feedback: prev[comp.id]?.feedback || '',
-                                    },
-                                  }))
-                                }
-                                className="p-1 hover:scale-110 transition-transform"
-                              >
-                                <Star
-                                  className={`w-5 h-5 ${
-                                    (ratingMap[comp.id]?.stars || 0) >= star
-                                      ? 'text-amber-400 fill-amber-400'
-                                      : 'text-slate-600'
-                                  }`}
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Optional feedback for the ward crew..."
-                            value={ratingMap[comp.id]?.feedback || ''}
-                            onChange={e =>
-                              setRatingMap(prev => ({
-                                ...prev,
-                                [comp.id]: {
-                                  stars: prev[comp.id]?.stars || 5,
-                                  feedback: e.target.value,
+                  <StarRating
+                    complaintId={comp.id}
+                    initialRating={comp.rating || comp.citizenRating?.stars}
+                    initialFeedback={comp.feedback || comp.citizenRating?.feedback}
+                    isReadOnly={comp.status === 'CLOSED' && (comp.rating !== undefined || comp.citizenRating !== undefined)}
+                    onRatingSubmitted={(newRating, newFeedback) => {
+                      setMyComplaints(prev =>
+                        prev.map(c =>
+                          c.id === comp.id
+                            ? {
+                                ...c,
+                                rating: newRating,
+                                feedback: newFeedback,
+                                status: 'CLOSED',
+                                citizenRating: {
+                                  stars: newRating,
+                                  feedback: newFeedback,
+                                  ratedAt: new Date().toISOString(),
                                 },
-                              }))
-                            }
-                            className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-100"
-                          />
-                          <button
-                            onClick={() => handleRateResolution(comp.id)}
-                            className="px-4 py-1.5 text-xs font-semibold rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
-                          >
-                            Submit Rating
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                              }
+                            : c
+                        )
+                      );
+                    }}
+                  />
                 )}
               </div>
             ))}

@@ -1,9 +1,9 @@
 import React from 'react';
-import { ShieldAlert, RefreshCw, Cpu, Database } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Cpu, Database, Compass } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'copilot' | 'command' | 'ward-triage' | 'inspector';
-  setActiveTab: (tab: 'copilot' | 'command' | 'ward-triage' | 'inspector') => void;
+  activeTab: 'copilot' | 'command' | 'ward-triage' | 'inspector' | 'ward-map';
+  setActiveTab: (tab: 'copilot' | 'command' | 'ward-triage' | 'inspector' | 'ward-map') => void;
   onSeedData: () => void;
   isSeeding: boolean;
   complaintCount: number;
@@ -43,6 +43,17 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             Citizen Copilot
+          </button>
+          <button
+            onClick={() => setActiveTab('ward-map')}
+            className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'ward-map'
+                ? 'bg-slate-800 text-cyan-400 shadow-sm border border-slate-700'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-cyan-400" />
+            <span>BBMP Ward Map</span>
           </button>
           <button
             onClick={() => setActiveTab('command')}
@@ -101,28 +112,34 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Mobile navigation row */}
-      <div className="md:hidden flex items-center justify-around px-2 py-2 border-t border-slate-800 bg-slate-900 text-xs">
+      <div className="md:hidden flex items-center justify-around border-t border-slate-800 py-2 px-3 text-xs bg-slate-900/80 overflow-x-auto gap-1">
         <button
           onClick={() => setActiveTab('copilot')}
-          className={`py-1 px-2 rounded ${activeTab === 'copilot' ? 'text-cyan-400 font-semibold' : 'text-slate-400'}`}
+          className={`py-1 px-2 rounded whitespace-nowrap ${activeTab === 'copilot' ? 'text-cyan-400 font-semibold bg-slate-800' : 'text-slate-400'}`}
         >
           Copilot
         </button>
         <button
+          onClick={() => setActiveTab('ward-map')}
+          className={`py-1 px-2 rounded whitespace-nowrap ${activeTab === 'ward-map' ? 'text-cyan-400 font-semibold bg-slate-800' : 'text-slate-400'}`}
+        >
+          Ward Map
+        </button>
+        <button
           onClick={() => setActiveTab('command')}
-          className={`py-1 px-2 rounded ${activeTab === 'command' ? 'text-cyan-400 font-semibold' : 'text-slate-400'}`}
+          className={`py-1 px-2 rounded whitespace-nowrap ${activeTab === 'command' ? 'text-cyan-400 font-semibold bg-slate-800' : 'text-slate-400'}`}
         >
           Command Center ({complaintCount})
         </button>
         <button
           onClick={() => setActiveTab('ward-triage')}
-          className={`py-1 px-2 rounded ${activeTab === 'ward-triage' ? 'text-cyan-400 font-semibold' : 'text-slate-400'}`}
+          className={`py-1 px-2 rounded whitespace-nowrap ${activeTab === 'ward-triage' ? 'text-cyan-400 font-semibold bg-slate-800' : 'text-slate-400'}`}
         >
-          Ward Triage
+          Triage
         </button>
         <button
           onClick={() => setActiveTab('inspector')}
-          className={`py-1 px-2 rounded ${activeTab === 'inspector' ? 'text-cyan-400 font-semibold' : 'text-slate-400'}`}
+          className={`py-1 px-2 rounded whitespace-nowrap ${activeTab === 'inspector' ? 'text-cyan-400 font-semibold bg-slate-800' : 'text-slate-400'}`}
         >
           Inspector
         </button>

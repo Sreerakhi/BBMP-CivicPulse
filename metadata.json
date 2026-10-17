@@ -1,6 +1,6 @@
 {
   "name": "BBMP CivicPulse - Multi-Agent Civic Governance & Command Center",
   "description": "AI-powered citizen civic copilot and municipal command center for Bengaluru BBMP with real-time ward clustering, proactive complaint intake, and multi-agent coordination.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

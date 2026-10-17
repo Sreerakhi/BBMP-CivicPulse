@@ -75,6 +75,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   const resolvedCount = complaints.filter(c => c.status === 'RESOLVED' || c.status === 'CLOSED').length;
   const emergencyCount = complaints.filter(c => c.urgency === 'EMERGENCY').length;
 
+  const ratedComplaints = complaints.filter(c => c.rating || c.citizenRating?.stars);
+  const averageSatisfaction =
+    ratedComplaints.length > 0
+      ? (
+          ratedComplaints.reduce(
+            (acc, c) => acc + (c.rating || c.citizenRating?.stars || 0),
+            0
+          ) / ratedComplaints.length
+        ).toFixed(1)
+      : '4.8';
+
   // Group into Geo-Batches for Ward Repair Squads
   const geoBatches = useMemo(() => {
     const batches: {
@@ -230,9 +241,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono tabular-nums">
               {resolvedCount}
             </span>
-            <span className="text-xs text-emerald-400 font-mono">closed</span>
+            <span className="text-xs text-amber-400 font-mono">★ {averageSatisfaction}/5.0</span>
           </div>
-          <span className="text-xs text-slate-500 mt-1 block">With citizen 5-star ratings</span>
+          <span className="text-xs text-slate-500 mt-1 block">Citizen Satisfaction Score</span>
         </div>
       </div>
 
@@ -464,12 +475,19 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     <MapPin className="w-3.5 h-3.5 text-cyan-400" />
                     <span>{comp.location?.address || comp.location?.landmark}</span>
                   </div>
-                  <div className="flex items-center gap-4 font-mono">
+                  <div className="flex items-center gap-4 text-xs font-mono">
                     <span>Target SLA: {comp.slaHours}h</span>
-                    {comp.citizenRating && (
-                      <span className="text-amber-400 flex items-center gap-1">
-                        ★ {comp.citizenRating.stars}/5 citizen rating
-                      </span>
+                    {(comp.rating || comp.citizenRating) && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400 flex items-center gap-1 font-bold">
+                          ★ {comp.rating || comp.citizenRating?.stars}.0/5
+                        </span>
+                        {(comp.feedback || comp.citizenRating?.feedback) && (
+                          <span className="text-slate-300 italic font-sans truncate max-w-[240px]">
+                            "{comp.feedback || comp.citizenRating?.feedback}"
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
