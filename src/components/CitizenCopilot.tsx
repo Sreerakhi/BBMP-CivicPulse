@@ -64,6 +64,7 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
   const [selectedWard, setSelectedWard] = useState('Koramangala 151');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [locationConfirmedNotice, setLocationConfirmedNotice] = useState<string | null>(null);
 
   // Sync with initialLocation passed from Ward Map tab
   useEffect(() => {
@@ -72,7 +73,18 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
       setSelectedWard(initialLocation.ward);
       setSelectedCoords({ lat: initialLocation.lat, lng: initialLocation.lng });
       setAutoDetectedWardBadge(`Auto-detected: ${initialLocation.ward}${initialLocation.constituency ? ` (${initialLocation.constituency})` : ''}`);
-      setShowMapPicker(true);
+      setShowMapPicker(false);
+      setLocationConfirmedNotice(
+        `✓ Location confirmed from Ward Map: ${initialLocation.landmark} (${initialLocation.ward}). Describe your grievance below or speak to submit.`
+      );
+      setTimeout(() => {
+        const el = document.getElementById('complaint-input-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const textarea = el.querySelector('textarea');
+          if (textarea) textarea.focus();
+        }
+      }, 180);
     }
   }, [initialLocation]);
 
@@ -593,7 +605,22 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
         </div>
 
         {/* Input Text Box with Speech Controls */}
-        <div className="space-y-2">
+        <div id="complaint-input-section" className="space-y-2 pt-2 scroll-mt-24">
+          {locationConfirmedNotice && (
+            <div className="flex items-center justify-between gap-2 p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-lg text-xs text-emerald-200 shadow-md">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-medium">{locationConfirmedNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocationConfirmedNotice(null)}
+                className="text-emerald-400 hover:text-emerald-100 text-xs px-1.5 py-0.5 rounded hover:bg-emerald-900/50"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <span>Describe the Problem</span>
@@ -803,13 +830,56 @@ export const CitizenCopilot: React.FC<CitizenCopilotProps> = ({
           </div>
 
           {/* Interactive Bengaluru Ward Map Picker */}
-          {showMapPicker && (
+          {showMapPicker ? (
             <div className="pt-1">
               <WardMapPicker
                 currentLandmark={landmarkInput}
                 currentWard={selectedWard}
                 onLocationSelect={handleLocationSelect}
+                onProceed={() => {
+                  setShowMapPicker(false);
+                  setLocationConfirmedNotice(
+                    `✓ Location locked: ${landmarkInput || 'Selected Spot'} in ${selectedWard}. Ready to describe your civic grievance below.`
+                  );
+                  setTimeout(() => {
+                    const el = document.getElementById('complaint-input-section');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      const textarea = el.querySelector('textarea');
+                      if (textarea) textarea.focus();
+                    }
+                  }, 120);
+                }}
               />
+            </div>
+          ) : (
+            <div className="bg-slate-900/90 border border-emerald-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">
+                      {landmarkInput || 'Selected Bengaluru Location'}
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/80">
+                      ✓ Ward Locked
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono mt-0.5 block">
+                    {selectedWard} · GPS: {selectedCoords?.lat.toFixed(4)}°N, {selectedCoords?.lng.toFixed(4)}°E
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMapPicker(true)}
+                className="text-xs font-semibold px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Reopen / Change on Map</span>
+              </button>
             </div>
           )}
         </div>

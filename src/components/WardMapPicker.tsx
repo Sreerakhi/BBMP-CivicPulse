@@ -92,6 +92,7 @@ export const WardMapPicker: React.FC<WardMapPickerProps> = ({
   const [isLocating, setIsLocating] = useState(false);
   const [geoStatusMsg, setGeoStatusMsg] = useState<string | null>(null);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [justConfirmed, setJustConfirmed] = useState(false);
 
   // Filtered wards for autocomplete
   const searchResults = BBMP_FULL_WARDS.filter(w => {
@@ -700,6 +701,7 @@ export const WardMapPicker: React.FC<WardMapPickerProps> = ({
             <button
               type="button"
               onClick={() => {
+                setJustConfirmed(true);
                 onLocationSelect({
                   landmark: selectedLandmark,
                   address: `${selectedLandmark}, Ward ${selectedWard.number} (${selectedWard.name}), Bengaluru`,
@@ -710,12 +712,31 @@ export const WardMapPicker: React.FC<WardMapPickerProps> = ({
                   constituency: selectedWard.assemblyConstituency,
                   corporation: selectedWard.corporation,
                 });
-                if (onProceed) onProceed();
+                if (onProceed) {
+                  onProceed();
+                }
+                setTimeout(() => {
+                  setJustConfirmed(false);
+                }, 2000);
               }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs sm:text-sm transition-all shadow-lg shadow-cyan-950"
+              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-semibold text-xs sm:text-sm transition-all shadow-lg active:scale-[0.98] ${
+                justConfirmed
+                  ? 'bg-emerald-600 text-white shadow-emerald-950 ring-2 ring-emerald-400'
+                  : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-950 hover:shadow-cyan-900/50'
+              }`}
             >
-              <span>Proceed with this Ward & Location</span>
-              <ChevronRight className="w-4 h-4" />
+              {justConfirmed ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-100 stroke-[3]" />
+                  <span>✓ Location Confirmed: {selectedLandmark}</span>
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-4 h-4 text-cyan-200" />
+                  <span>Proceed with this Ward & Location</span>
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>
