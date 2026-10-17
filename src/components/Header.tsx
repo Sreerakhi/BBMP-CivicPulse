@@ -9,6 +9,7 @@ interface HeaderProps {
   onSeedData: () => void;
   isSeeding: boolean;
   complaintCount: number;
+  myComplaintCount?: number;
   currentRole: UserRole;
   onSelectRole: (role: UserRole) => void;
 }
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSeedData,
   isSeeding,
   complaintCount,
+  myComplaintCount,
   currentRole,
   onSelectRole,
 }) => {
@@ -42,13 +44,21 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="hidden lg:flex items-center gap-1 sm:gap-1.5">
           <button
             onClick={() => setActiveTab('copilot')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'copilot'
                 ? 'bg-slate-800 text-cyan-400 shadow-sm border border-slate-700'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
             }`}
           >
-            Citizen Copilot
+            <span>Citizen Copilot</span>
+            {myComplaintCount !== undefined && myComplaintCount > 0 && (
+              <span
+                className="font-mono text-[11px] px-1.5 py-0.2 bg-emerald-950 text-emerald-300 rounded border border-emerald-800"
+                title={`${myComplaintCount} complaint(s) registered by you`}
+              >
+                {myComplaintCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('ward-map')}

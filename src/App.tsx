@@ -14,11 +14,45 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('CITIZEN');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [emergingIssues, setEmergingIssues] = useState<EmergingIssue[]>([]);
-  const [myComplaints, setMyComplaints] = useState<Complaint[]>([]);
+  const [myComplaints, setMyComplaints] = useState<Complaint[]>(() => {
+    try {
+      const saved = localStorage.getItem('civicpulse_my_complaints');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [selectedLocationFromMap, setSelectedLocationFromMap] = useState<SelectedLocationData | null>(null);
   const [currentTrace, setCurrentTrace] = useState<AgentTrace | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
+
+  // Persist registered citizen complaints in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('civicpulse_my_complaints', JSON.stringify(myComplaints));
+    } catch (e) {
+      // ignore
+    }
+  }, [myComplaints]);
+
+  // Sync any remote updates (e.g. status changes, resolution notes) to user's registered complaints
+  useEffect(() => {
+    if (complaints.length > 0 && myComplaints.length > 0) {
+      setMyComplaints(prev => {
+        let changed = false;
+        const updated = prev.map(myComp => {
+          const remote = complaints.find(c => c.id === myComp.id || c.ticketNumber === myComp.ticketNumber);
+          if (remote && (remote.status !== myComp.status || remote.officialResolutionNotes !== myComp.officialResolutionNotes)) {
+            changed = true;
+            return { ...myComp, ...remote };
+          }
+          return myComp;
+        });
+        return changed ? updated : prev;
+      });
+    }
+  }, [complaints]);
 
   // Real-time Firestore Listeners
   useEffect(() => {
@@ -117,6 +151,7 @@ export default function App() {
         onSeedData={triggerDataSeed}
         isSeeding={isSeeding}
         complaintCount={complaints.length}
+        myComplaintCount={myComplaints.length}
         currentRole={currentRole}
         onSelectRole={setCurrentRole}
       />
@@ -132,6 +167,8 @@ export default function App() {
             myComplaints={myComplaints}
             setMyComplaints={setMyComplaints}
             initialLocation={selectedLocationFromMap}
+            currentRole={currentRole}
+            onSelectRole={setCurrentRole}
           />
         )}
 
